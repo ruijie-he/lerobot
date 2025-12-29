@@ -166,6 +166,25 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
         self.config = config
         self.misc_keys_queue = Queue()
 
+    def _on_press(self, key):
+        """Override to handle both character keys and special keys."""
+        if hasattr(key, "char"):
+            self.event_queue.put((key.char, True))
+        else:
+            # Handle special keys (arrows, shift, ctrl, etc.)
+            self.event_queue.put((key, True))
+
+    def _on_release(self, key):
+        """Override to handle both character keys and special keys."""
+        if hasattr(key, "char"):
+            self.event_queue.put((key.char, False))
+        else:
+            # Handle special keys (arrows, shift, ctrl, etc.)
+            self.event_queue.put((key, False))
+        if key == keyboard.Key.esc:
+            logging.info("ESC pressed, disconnecting.")
+            self.disconnect()
+
     @property
     def action_features(self) -> dict:
         if self.config.use_gripper:
