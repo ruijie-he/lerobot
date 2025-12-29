@@ -123,14 +123,15 @@ def main():
         print(f"Episode {episode_count} started (max steps: {getattr(env, '_max_episode_steps', 'unknown')})")
 
         while running:
-            # Flush SpaceMouse buffer by reading multiple times to get latest state
+            # Flush SpaceMouse buffer by reading until no more data is available
             # This prevents accumulated lag by discarding old buffered inputs
             state = pyspacemouse.read()
-            # Read up to 10 times to flush buffer, keeping the last valid state
-            for _ in range(10):
+            # Safety limit to prevent infinite loop if read() never returns None
+            for _ in range(100):
                 next_state = pyspacemouse.read()
-                if next_state is not None:
-                    state = next_state
+                if next_state is None:
+                    break
+                state = next_state
 
             # Display image
             if "pixels" in obs:
