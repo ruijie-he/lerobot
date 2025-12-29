@@ -7,10 +7,13 @@ Note: Episodes will automatically reset when they reach the task's max step limi
 """
 
 import argparse
-import numpy as np
-from lerobot.envs.factory import make_env
-from lerobot.envs.configs import LiberoEnv, MetaworldEnv
+
 import cv2
+import numpy as np
+
+from lerobot.envs.configs import LiberoEnv, MetaworldEnv
+from lerobot.envs.factory import make_env
+
 
 def main():
     parser = argparse.ArgumentParser(description="Keyboard teleoperation for simulation environments")
@@ -19,19 +22,19 @@ def main():
         type=str,
         choices=["metaworld", "libero"],
         default="metaworld",
-        help="Environment type (default: metaworld)"
+        help="Environment type (default: metaworld)",
     )
     parser.add_argument(
         "--task",
         type=str,
         default=None,
-        help="Task name (default: metaworld-reach-v3 for metaworld, libero_spatial for libero)"
+        help="Task name (default: metaworld-reach-v3 for metaworld, libero_spatial for libero)",
     )
     parser.add_argument(
         "--max-episode-steps",
         type=int,
         default=None,
-        help="Override max episode steps (default: uses environment default, typically 500 for MetaWorld)"
+        help="Override max episode steps (default: uses environment default, typically 500 for MetaWorld)",
     )
     args = parser.parse_args()
 
@@ -59,15 +62,12 @@ def main():
 
     # Override max episode steps if specified
     if args.max_episode_steps is not None:
-        if hasattr(env, '_env') and hasattr(env._env, 'max_path_length'):
+        if hasattr(env, "_env") and hasattr(env._env, "max_path_length"):
             env._env.max_path_length = args.max_episode_steps
             env._max_episode_steps = args.max_episode_steps
             print(f"Overriding max episode steps to: {args.max_episode_steps}")
         else:
-            print(f"Warning: Could not override max episode steps for this environment type")
-
-    # Keyboard state tracking
-    pressed_keys = set()
+            print("Warning: Could not override max episode steps for this environment type")
 
     print("Keyboard controls (focus the OpenCV window):")
     print("  Arrow keys: Move end-effector (up/down/left/right)")
@@ -98,10 +98,24 @@ def main():
                     img = list(img.values())[0]  # Get first camera view
                 # Add text overlay with controls and step count
                 gripper_text = "CLOSE" if gripper_state > 0.5 else "OPEN" if gripper_state < -0.5 else "HOLD"
-                cv2.putText(img, f"Step: {step_count} | Episode: {episode_count} | Gripper: {gripper_text}",
-                           (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-                cv2.putText(img, "Arrow: Move | W/S: Z | O/C: Gripper | ESC: Quit",
-                           (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+                cv2.putText(
+                    img,
+                    f"Step: {step_count} | Episode: {episode_count} | Gripper: {gripper_text}",
+                    (10, 20),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    (255, 255, 255),
+                    1,
+                )
+                cv2.putText(
+                    img,
+                    "Arrow: Move | W/S: Z | O/C: Gripper | ESC: Quit",
+                    (10, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    (255, 255, 255),
+                    1,
+                )
                 cv2.imshow("Simulation - FOCUS THIS WINDOW", img)
 
             # Get keyboard input from OpenCV (must call after imshow)
@@ -135,22 +149,22 @@ def main():
             elif key == 83 or key == 3:  # Right arrow
                 delta_x = 1.0
             # W/S for Z movement
-            elif key == ord('w') or key == ord('W'):
+            elif key == ord("w") or key == ord("W"):
                 delta_z = 1.0
-            elif key == ord('s') or key == ord('S'):
+            elif key == ord("s") or key == ord("S"):
                 delta_z = -1.0
             # Gripper control - toggle state
-            elif key == ord('o') or key == ord('O'):
+            elif key == ord("o") or key == ord("O"):
                 gripper_state = -1.0  # Open
-                print(f"Gripper: OPEN")
-            elif key == ord('c') or key == ord('C'):
+                print("Gripper: OPEN")
+            elif key == ord("c") or key == ord("C"):
                 gripper_state = 1.0  # Open
-                print(f"Gripper: CLOSE")
-            elif key == ord('h') or key == ord('H'):
+                print("Gripper: CLOSE")
+            elif key == ord("h") or key == ord("H"):
                 gripper_state = 0.0  # Hold
-                print(f"Gripper: HOLD")
+                print("Gripper: HOLD")
             # Exit
-            elif key == 27 or key == ord('q') or key == ord('Q'):  # ESC or Q
+            elif key == 27 or key == ord("q") or key == ord("Q"):  # ESC or Q
                 print("Exiting...")
                 running = False
                 continue
@@ -186,6 +200,7 @@ def main():
     finally:
         env.close()
         cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()
