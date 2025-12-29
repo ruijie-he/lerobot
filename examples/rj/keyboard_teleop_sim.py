@@ -10,21 +10,27 @@ import cv2
 def main():
     # Choose your environment
     # Option 1: MetaWorld (use V3 tasks - see metaworld_config.json for available tasks)
-    env_cfg = MetaworldEnv(
-        task="metaworld-reach-v3",  # Use V3 tasks: reach-v3, push-v3, pick-place-v3, etc.
-        obs_type="pixels",
-    )
-    
-    # Option 2: LIBERO (uncomment to use instead)
-    # env_cfg = LiberoEnv(
-    #     task="libero_spatial",
-    #     camera_name="top",
+    # env_cfg = MetaworldEnv(
+    #     task="metaworld-reach-v3",  # Use V3 tasks: reach-v3, push-v3, pick-place-v3, etc.
+    #     obs_type="pixels",
     # )
     
+    # Option 2: LIBERO (uncomment to use instead)
+    env_cfg = LiberoEnv(
+        task="libero_spatial",
+        camera_name="agentview_image",  # Single camera for simplicity
+        obs_type="pixels",  # Use pixels for simpler observation structure
+    )
+    
     # Create environment
-    envs_dict = make_env(env_cfg, n_envs=1)
-    vec_env = list(envs_dict.values())[0][0]  # Get the vectorized environment
-    env = vec_env.envs[0]  # Get the first (and only) single environment from vector env
+    try:
+        envs_dict = make_env(env_cfg, n_envs=1)
+        vec_env = list(envs_dict.values())[0][0]  # Get the vectorized environment
+        env = vec_env.envs[0]  # Get the first (and only) single environment from vector env
+    except Exception as e:
+        print(f"Error creating environment: {e}")
+        print(f"Environment config: {env_cfg}")
+        raise
     
     # Create keyboard teleoperator
     keyboard_config = KeyboardEndEffectorTeleopConfig(use_gripper=True)
@@ -41,9 +47,27 @@ def main():
     try:
         obs, info = env.reset()
         
+        frame_count = 0
         while True:
             # Get keyboard input (deltas)
             keyboard_action = keyboard.get_action()
+            
+            # Debug: print keyboard input periodically
+            frame_count += 1
+            if frame_count % 60 == 0:  # Every 60 frames (~2 seconds at 30fps)
+                has_input = any([
+                    keyboard_action.get("delta_x", 0.0) != 0.0,
+                    keyboard_action.get("delta_y", 0.0) != 0.0,
+                    keyboard_action.get("delta_z", 0.0) != 0.0,
+                    keyboard_action.get("gripper", 1.0) != 1.0,
+                ])
+                if has_input:
+                    print(f"✓ Keyboard input detected: {keyboard_action}")
+                else:
+                    print("⚠ No keyboard input. Press arrow keys, shift, or ctrl to test.")
+                    # Debug: check what keys are in current_pressed
+                    if hasattr(keyboard, 'current_pressed') and keyboard.current_pressed:
+                        print(f"  Pressed keys: {list(keyboard.current_pressed.keys())}")
             
             # Convert keyboard deltas to action
             # MetaWorld: 4D [delta_x, delta_y, delta_z, gripper] - uses relative actions
@@ -82,11 +106,33 @@ def main():
             
             # Display image
             if "pixels" in obs:
-                img = obs["pixels"]
-                if isinstance(img, dict):
-                    img = list(img.values())[0]  # Get first camera view
-                cv2.imshow("Simulation", img)
-                cv2.waitKey(1)
+                pixels = obs["pixels"]
+                if isinstance(pixels, dict):
+                    # LIBERO returns dict like {"image": array, "image2": array}
+                    # Get the first available image (usually "image" for agentview)
+                    img = None
+                    for key in ["image", "image2"]:
+                        if key in pixels:
+                            img = pixels[key]
+                            break
+                    if img is None:
+                        # Fallback to first value
+                        img = list(pixels.values())[0]
+                else:
+                    # MetaWorld returns single image array
+                    img = pixels
+                
+                # Ensure image is numpy array and has correct shape
+                if isinstance(img, np.ndarray):
+                    # LIBERO images are RGB, OpenCV expects BGR
+                    if len(img.shape) == 3 and img.shape[2] == 3:
+                        display_img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                    else:
+                        display_img = img
+                    cv2.imshow("Simulation", display_img)
+                    cv2.waitKey(1)
+                else:
+                    print(f"Warning: Unexpected image type: {type(img)}, shape: {getattr(img, 'shape', 'N/A')}")
             
             # Reset on episode end
             if terminated or truncated:
