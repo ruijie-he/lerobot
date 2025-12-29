@@ -169,7 +169,6 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
         super().__init__(config)
         self.config = config
         self.misc_keys_queue = Queue()
-        self._key_map = {}  # Map string representations to actual key objects
 
     def _on_press(self, key):
         """Override to handle special keys (arrow keys, shift, ctrl) in addition to regular keys."""
@@ -177,26 +176,15 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
             self.event_queue.put((key.char, True))
         else:
             # Handle special keys (arrow keys, shift, ctrl, etc.)
-            # Convert key object to string for dictionary storage (keys must be hashable)
-            key_str = str(key)
-            self.event_queue.put((key_str, True))
-            # Also store the actual key object for comparison
-            if not hasattr(self, '_key_map'):
-                self._key_map = {}
-            self._key_map[key_str] = key
-            # Debug: log special key presses
-            logging.debug(f"Special key pressed: {key} -> {key_str}")
+            self.event_queue.put((key, True))
 
     def _on_release(self, key):
         """Override to handle special keys (arrow keys, shift, ctrl) in addition to regular keys."""
         if hasattr(key, "char"):
             self.event_queue.put((key.char, False))
         else:
-            # Handle special keys - convert to string for consistency
-            key_str = str(key)
-            self.event_queue.put((key_str, False))
-            # Clean up key_map when key is released
-            self._key_map.pop(key_str, None)
+            # Handle special keys
+            self.event_queue.put((key, False))
         if key == keyboard.Key.esc:
             logging.info("ESC pressed, disconnecting.")
             self.disconnect()
@@ -228,46 +216,31 @@ class KeyboardEndEffectorTeleop(KeyboardTeleop):
         delta_z = 0.0
         gripper_action = 1.0
 
-        # Debug: log pressed keys occasionally
-        if len(self.current_pressed) > 0:
-            logging.debug(f"Current pressed keys: {list(self.current_pressed.keys())}")
-
         # Generate action based on current key states
-        # Pre-compute string representations of special keys for comparison
-        key_up_str = str(keyboard.Key.up)
-        key_down_str = str(keyboard.Key.down)
-        key_left_str = str(keyboard.Key.left)
-        key_right_str = str(keyboard.Key.right)
-        key_shift_str = str(keyboard.Key.shift)
-        key_shift_r_str = str(keyboard.Key.shift_r)
-        key_ctrl_r_str = str(keyboard.Key.ctrl_r)
-        key_ctrl_l_str = str(keyboard.Key.ctrl_l)
-        
-        for key_str, val in self.current_pressed.items():
-            # Compare using string representations
-            if key_str == key_up_str:
+        for key, val in self.current_pressed.items():
+            if key == keyboard.Key.up:
                 delta_y = -1.0
-            elif key_str == key_down_str:
+            elif key == keyboard.Key.down:
                 delta_y = 1.0
-            elif key_str == key_left_str:
+            elif key == keyboard.Key.left:
                 delta_x = 1.0
-            elif key_str == key_right_str:
+            elif key == keyboard.Key.right:
                 delta_x = -1.0
-            elif key_str == key_shift_str:
+            elif key == keyboard.Key.shift:
                 delta_z = -1.0
-            elif key_str == key_shift_r_str:
+            elif key == keyboard.Key.shift_r:
                 delta_z = 1.0
-            elif key_str == key_ctrl_r_str:
+            elif key == keyboard.Key.ctrl_r:
                 # Gripper actions are expected to be between 0 (close), 1 (stay), 2 (open)
                 gripper_action = 2.0  # open
-            elif key_str == key_ctrl_l_str:
+            elif key == keyboard.Key.ctrl_l:
                 gripper_action = 0.0  # close
             else:
                 # If the key is pressed, add it to the misc_keys_queue
                 # this will record key presses that are not part of the delta_x, delta_y, delta_z
                 # this is useful for retrieving other events like interventions for RL, episode success, etc.
-                if isinstance(key_str, str) and key_str not in self._key_map:  # Only queue regular string keys
-                    self.misc_keys_queue.put(key_str)
+                if isinstance(key, str):  # Only queue string keys, not special key objects
+                    self.misc_keys_queue.put(key)
 
         action_dict = {
             "delta_x": delta_x,
