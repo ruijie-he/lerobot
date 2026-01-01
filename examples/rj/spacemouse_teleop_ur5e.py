@@ -24,6 +24,7 @@ import argparse
 import time
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 try:
     import pyspacemouse
@@ -144,11 +145,11 @@ def main():
 
     # Print control instructions
     print("=" * 70)
-    print("CONTROLS:")
+    print("CONTROLS (End-Effector Frame):")
     print("  Move SpaceMouse:")
-    print("    - Translation (X/Y/Z): Move the device")
+    print("    - Translation (X/Y/Z): Move the device (relative to tool orientation)")
     if not args.disable_rotation:
-        print("    - Rotation (Roll/Pitch/Yaw): Rotate the device")
+        print("    - Rotation (Roll/Pitch/Yaw): Rotate the device (relative to tool orientation)")
     print("  Buttons:")
     print("    - Left button: Reserved (future gripper close)")
     print("    - Right button: Reserved (future gripper open)")
@@ -180,23 +181,42 @@ def main():
                 # Get current TCP pose
                 current_pose = robot.rtde_receive.getActualTCPPose()  # [x, y, z, rx, ry, rz]
 
-                # Calculate deltas from SpaceMouse input
+                # Calculate deltas from SpaceMouse input in end-effector frame
                 # Convert SpaceMouse units to meters and radians with scaling
-                delta_x = state.x * args.translation_scale * 0.001  # mm to meters
-                delta_y = state.y * args.translation_scale * 0.001
-                delta_z = state.z * args.translation_scale * 0.001
+                # Signs are flipped for more intuitive control
+                delta_translation_ee = np.array([
+                    state.x * args.translation_scale * 0.001,  # mm to meters
+                    -state.y * args.translation_scale * 0.001,
+                    -state.z * args.translation_scale * 0.001,
+                ])
+
+                # Convert current orientation from axis-angle to rotation matrix
+                current_rotvec = np.array(current_pose[3:6])
+                R_current = Rotation.from_rotvec(current_rotvec)
+
+                # Transform translation delta from end-effector frame to base frame
+                delta_translation_base = R_current.apply(delta_translation_ee)
 
                 if args.disable_rotation:
-                    delta_rx = 0.0
-                    delta_ry = 0.0
-                    delta_rz = 0.0
+                    # No rotation change
+                    target_rotvec = current_rotvec
                 else:
-                    delta_rx = state.roll * args.rotation_scale * 0.01  # scaled rotation
-                    delta_ry = state.pitch * args.rotation_scale * 0.01
-                    delta_rz = state.yaw * args.rotation_scale * 0.01
+                    # Calculate rotation delta in end-effector frame
+                    # Signs are flipped for more intuitive control
+                    delta_rotvec_ee = np.array([
+                        -state.pitch * args.rotation_scale * 0.01,
+                        -state.roll * args.rotation_scale * 0.01,
+                        state.yaw * args.rotation_scale * 0.01,
+                    ])
+
+                    # Compose rotations: R_target = R_current * R_delta
+                    R_delta = Rotation.from_rotvec(delta_rotvec_ee)
+                    R_target = R_current * R_delta
+                    target_rotvec = R_target.as_rotvec()
 
                 # Compute target pose
-                target_pose = np.array(current_pose) + np.array([delta_x, delta_y, delta_z, delta_rx, delta_ry, delta_rz])
+                target_position = np.array(current_pose[0:3]) + delta_translation_base
+                target_pose = np.concatenate([target_position, target_rotvec])
 
                 # Create action dictionary
                 action = {
