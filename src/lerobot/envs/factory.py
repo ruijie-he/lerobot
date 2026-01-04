@@ -157,6 +157,7 @@ def make_env(
             n_envs=n_envs,
             gym_kwargs=cfg.gym_kwargs,
             env_cls=env_cls,
+            episode_length=cfg.episode_length,
         )
 
     if cfg.gym_id not in gym_registry:

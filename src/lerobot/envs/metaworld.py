@@ -84,6 +84,7 @@ class MetaworldEnv(gym.Env):
         observation_height=480,
         visualization_width=640,
         visualization_height=480,
+        episode_length=None,
     ):
         super().__init__()
         self.task = task.replace("metaworld-", "")
@@ -96,7 +97,10 @@ class MetaworldEnv(gym.Env):
         self.camera_name = camera_name
 
         self._env = self._make_envs_task(self.task)
-        self._max_episode_steps = self._env.max_path_length
+        self._max_episode_steps = episode_length if episode_length is not None else self._env.max_path_length
+        # Override the underlying environment's max_path_length if episode_length is specified
+        if episode_length is not None:
+            self._env.max_path_length = episode_length
         self.task_description = TASK_DESCRIPTIONS[self.task]
 
         self.expert_policy = TASK_POLICY_MAPPING[self.task]()
@@ -272,6 +276,7 @@ def create_metaworld_envs(
     n_envs: int,
     gym_kwargs: dict[str, Any] | None = None,
     env_cls: Callable[[Sequence[Callable[[], Any]]], Any] | None = None,
+    episode_length: int | None = None,
 ) -> dict[str, dict[int, Any]]:
     """
     Create vectorized Meta-World environments with a consistent return shape.
@@ -305,7 +310,10 @@ def create_metaworld_envs(
             print(f"Building vec env | group={group} | task_id={tid} | task={task_name}")
 
             # build n_envs factories
-            fns = [(lambda tn=task_name: MetaworldEnv(task=tn, **gym_kwargs)) for _ in range(n_envs)]
+            fns = [
+                (lambda tn=task_name: MetaworldEnv(task=tn, episode_length=episode_length, **gym_kwargs))
+                for _ in range(n_envs)
+            ]
 
             out[group][tid] = env_cls(fns)
 
